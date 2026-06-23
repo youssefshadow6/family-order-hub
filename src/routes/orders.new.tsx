@@ -21,11 +21,10 @@ function NewOrderPage() {
   const [customer, setCustomer] = useState("");
   const [items, setItems] = useState<OrderItem[]>([]);
   const [padForProduct, setPadForProduct] = useState<Product | null>(null);
-  
-  // حالة جديدة عشان نتحكم في فتح وقفل شاشة إضافة منتج جديد
   const [creatingProduct, setCreatingProduct] = useState(false);
 
-  const { data: customers = [] } = useQuery({
+  // التعديل: إضافة الحفظ في الذاكرة ومؤشر التحميل للعملاء
+  const { data: customers = [], isLoading: isLoadingCustomers } = useQuery({
     queryKey: ["customers"],
     queryFn: async (): Promise<Customer[]> => {
       const { data } = await supabase
@@ -35,9 +34,11 @@ function NewOrderPage() {
         .order("name");
       return (data ?? []) as Customer[];
     },
+    staleTime: 1000 * 60 * 30,
   });
 
-  const { data: products = [] } = useQuery({
+  // التعديل: إضافة الحفظ في الذاكرة ومؤشر التحميل للمنتجات
+  const { data: products = [], isLoading: isLoadingProducts } = useQuery({
     queryKey: ["products"],
     queryFn: async (): Promise<Product[]> => {
       const { data } = await supabase
@@ -46,6 +47,7 @@ function NewOrderPage() {
         .order("name", { ascending: true });
       return (data ?? []) as Product[];
     },
+    staleTime: 1000 * 60 * 30,
   });
 
   const addItem = (p: Product, qty: number) => {
@@ -115,12 +117,14 @@ function NewOrderPage() {
             value={customer}
             onChange={setCustomer}
             customers={customers}
+            isLoading={isLoadingCustomers} // تمرير حالة التحميل
           />
         )}
         {step === "products" && (
           <ProductsStep
             products={products}
             items={items}
+            isLoading={isLoadingProducts} // تمرير حالة التحميل
             onPick={(p) => setPadForProduct(p)}
             onRemove={removeItem}
             onAddNew={() => setCreatingProduct(true)}
@@ -194,7 +198,6 @@ function NewOrderPage() {
         />
       )}
 
-      {/* شاشة إضافة منتج جديد لحظية زي الموجودة في صفحة المنتجات */}
       {creatingProduct && (
         <ProductSheet
           initial={null}
@@ -209,10 +212,12 @@ function CustomerStep({
   value,
   onChange,
   customers,
+  isLoading,
 }: {
   value: string;
   onChange: (s: string) => void;
   customers: Customer[];
+  isLoading: boolean;
 }) {
   const suggestions = useMemo(() => {
     const q = value.trim().toLowerCase();
@@ -238,7 +243,12 @@ function CustomerStep({
         />
       </div>
 
-      {suggestions.length > 0 && (
+      {/* التعديل: عرض رسالة التحميل للعملاء */}
+      {isLoading ? (
+        <div className="mt-6 text-sm font-bold text-muted-foreground animate-pulse text-center">
+          جاري تحميل قائمة العملاء... ⏳
+        </div>
+      ) : suggestions.length > 0 && (
         <div className="mt-4">
           <div className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
             Suggestions
@@ -263,12 +273,14 @@ function CustomerStep({
 function ProductsStep({
   products,
   items,
+  isLoading,
   onPick,
   onRemove,
   onAddNew,
 }: {
   products: Product[];
   items: OrderItem[];
+  isLoading: boolean;
   onPick: (p: Product) => void;
   onRemove: (id: string) => void;
   onAddNew: () => void;
@@ -301,13 +313,19 @@ function ProductsStep({
         />
       </div>
 
-      {filteredProducts.length === 0 && products.length > 0 ? (
+      {/* التعديل: عرض رسالة التحميل للمنتجات */}
+      {isLoading ? (
+        <div className="flex justify-center items-center py-20">
+          <div className="text-lg font-bold text-muted-foreground animate-pulse">
+            جاري تحميل المنتجات... ⏳
+          </div>
+        </div>
+      ) : filteredProducts.length === 0 && products.length > 0 ? (
         <div className="mt-8 text-center text-muted-foreground">
           <div className="text-base font-medium">No products match your search</div>
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-3">
-          {/* كارت جديد دايماً موجود في أول القائمة لإضافة منتج جديد بسرعة */}
           <button
             onClick={onAddNew}
             className="relative flex flex-col items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed border-muted-foreground/30 bg-muted/20 text-muted-foreground transition active:scale-[0.97] hover:border-primary hover:text-primary min-h-[180px]"
@@ -409,7 +427,6 @@ function ReviewStep({
   );
 }
 
-// مكون إضافة المنتج اللي جبناه من صفحة المنتجات
 function ProductSheet({
   initial,
   onClose,

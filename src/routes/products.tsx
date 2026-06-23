@@ -18,23 +18,21 @@ function ProductsPage() {
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
 
-  // التعديل الجذري هنا: الحفظ في ذاكرة التليفون عشان يفتح في لمح البصر
-  const { data: products = [], isLoading: isLoadingProducts } = useQuery({
+  const { data: products = [] } = useQuery({
     queryKey: ["products"],
     queryFn: async (): Promise<Product[]> => {
-      const { data } = await supabase
-        .from("products")
-        .select("*")
-        .order("name", { ascending: true });
-      if (data) localStorage.setItem("cached_products", JSON.stringify(data)); // حفظ في التليفون
+      const { data } = await supabase.from("products").select("*").order("name", { ascending: true });
+      if (data) localStorage.setItem("cached_products", JSON.stringify(data));
       return (data ?? []) as Product[];
     },
     initialData: () => {
-      // سحب البيانات من التليفون فوراً لإلغاء شاشة التحميل
-      const cached = localStorage.getItem("cached_products");
-      return cached ? JSON.parse(cached) : undefined;
+      try {
+        const cached = localStorage.getItem("cached_products");
+        if (cached) return JSON.parse(cached);
+      } catch (e) {}
+      return undefined;
     },
-    staleTime: 1000 * 60 * 5, // تحديث صامت في الخلفية كل 5 دقايق
+    staleTime: 1000 * 60 * 30, // 30 دقيقة حفظ في الذاكرة
   });
 
   const filteredProducts = useMemo(() => {
@@ -72,13 +70,7 @@ function ProductsPage() {
           />
         </div>
 
-        {isLoadingProducts && products.length === 0 ? (
-          <div className="flex justify-center items-center py-20">
-            <div className="text-lg font-bold text-muted-foreground animate-pulse">
-              جاري تحميل المنتجات لأول مرة فقط... ⏳
-            </div>
-          </div>
-        ) : products.length === 0 ? (
+        {products.length === 0 ? (
           <div className="mt-16 text-center text-muted-foreground">
             <Package className="mx-auto h-12 w-12 opacity-50" />
             <div className="mt-3 text-base font-medium">No products yet</div>
@@ -168,9 +160,40 @@ function ProductSheet({ initial, onClose }: { initial: Product | null; onClose: 
     })();
   };
 
+  // كود ضغط الصور السحري
   const onFile = (f: File) => {
     const reader = new FileReader();
-    reader.onload = () => setImageUrl(reader.result as string);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        let width = img.width;
+        let height = img.height;
+        const MAX_WIDTH = 800;
+        const MAX_HEIGHT = 800;
+
+        if (width > height) {
+          if (width > MAX_WIDTH) {
+            height *= MAX_WIDTH / width;
+            width = MAX_WIDTH;
+          }
+        } else {
+          if (height > MAX_HEIGHT) {
+            width *= MAX_HEIGHT / height;
+            height = MAX_HEIGHT;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        ctx?.drawImage(img, 0, 0, width, height);
+
+        const compressedBase64 = canvas.toDataURL("image/jpeg", 0.7);
+        setImageUrl(compressedBase64);
+      };
+      img.src = event.target?.result as string;
+    };
     reader.readAsDataURL(f);
   };
 

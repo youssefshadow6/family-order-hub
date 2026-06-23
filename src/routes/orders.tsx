@@ -54,8 +54,8 @@ function OrdersPage() {
     await supabase.from("orders").delete().eq("id", id);
   };
 
-  // الدالة دي اتعدلت عشان تخلي الأوردر يكتمل لو كل منتجاته اكتملت
-  const toggleItemCompletion = (order: Order, itemIndex: number, e: React.MouseEvent) => {
+  // التعديل هنا: ضفنا async و await عشان يكلم السيرفر إجباري
+  const toggleItemCompletion = async (order: Order, itemIndex: number, e: React.MouseEvent) => {
     e.stopPropagation();
     const newItems = [...order.items];
     newItems[itemIndex] = {
@@ -63,7 +63,6 @@ function OrdersPage() {
       completed: !newItems[itemIndex].completed,
     };
 
-    // بنفحص هل كل المنتجات بقت متعلم عليها صح؟
     const isAllCompleted = newItems.every((item) => item.completed);
     const newStatus = isAllCompleted ? "completed" : "active";
 
@@ -72,21 +71,19 @@ function OrdersPage() {
       old.map(o => o.id === order.id ? { ...o, items: newItems, status: newStatus } : o)
     );
 
-    // لو كلهم خلصوا، اقفل الأوردر عشان ينزل تحت
     if (isAllCompleted) {
       setExpandedId(null);
     }
 
-    // إرسال البيانات لقاعدة البيانات
-    supabase.from("orders").update({ items: newItems, status: newStatus }).eq("id", order.id);
+    // إرسال البيانات لقاعدة البيانات (await حلت المشكلة)
+    await supabase.from("orders").update({ items: newItems, status: newStatus }).eq("id", order.id);
   };
 
-  // الدالة دي اتعدلت عشان لو ضغطت على الزرار الكبير يعلم على كل المنتجات تلقائي
-  const toggleOrderStatus = (order: Order, e: React.MouseEvent) => {
+  // التعديل هنا كمان: ضفنا async و await
+  const toggleOrderStatus = async (order: Order, e: React.MouseEvent) => {
     e.stopPropagation();
     const newStatus = order.status === "completed" ? "active" : "completed";
 
-    // لو علمنا على الأوردر إنه خلص، نعلم على كل منتجاته إنها خلصت والعكس
     const newItems = order.items.map(item => ({
       ...item,
       completed: newStatus === "completed"
@@ -100,7 +97,8 @@ function OrdersPage() {
       setExpandedId(null);
     }
 
-    supabase.from("orders").update({ status: newStatus, items: newItems }).eq("id", order.id);
+    // إرسال البيانات لقاعدة البيانات (await حلت المشكلة)
+    await supabase.from("orders").update({ status: newStatus, items: newItems }).eq("id", order.id);
   };
 
   const sortedOrders = [...orders].sort((a, b) => {

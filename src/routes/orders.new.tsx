@@ -23,8 +23,7 @@ function NewOrderPage() {
   const [padForProduct, setPadForProduct] = useState<Product | null>(null);
   const [creatingProduct, setCreatingProduct] = useState(false);
 
-  // سحب العملاء من التليفون فوراً
-  const { data: customers = [], isLoading: isLoadingCustomers } = useQuery({
+  const { data: customers = [] } = useQuery({
     queryKey: ["customers"],
     queryFn: async (): Promise<Customer[]> => {
       const { data } = await supabase.from("customers").select("*").order("order_count", { ascending: false }).order("name");
@@ -32,14 +31,16 @@ function NewOrderPage() {
       return (data ?? []) as Customer[];
     },
     initialData: () => {
-      const cached = localStorage.getItem("cached_customers");
-      return cached ? JSON.parse(cached) : undefined;
+      try {
+        const cached = localStorage.getItem("cached_customers");
+        if (cached) return JSON.parse(cached);
+      } catch (e) {}
+      return undefined;
     },
-    staleTime: 1000 * 60 * 5,
+    staleTime: 1000 * 60 * 30,
   });
 
-  // سحب المنتجات من التليفون فوراً
-  const { data: products = [], isLoading: isLoadingProducts } = useQuery({
+  const { data: products = [] } = useQuery({
     queryKey: ["products"],
     queryFn: async (): Promise<Product[]> => {
       const { data } = await supabase.from("products").select("*").order("name", { ascending: true });
@@ -47,13 +48,14 @@ function NewOrderPage() {
       return (data ?? []) as Product[];
     },
     initialData: () => {
-      const cached = localStorage.getItem("cached_products");
-      return cached ? JSON.parse(cached) : undefined;
+      try {
+        const cached = localStorage.getItem("cached_products");
+        if (cached) return JSON.parse(cached);
+      } catch (e) {}
+      return undefined;
     },
-    staleTime: 1000 * 60 * 5,
+    staleTime: 1000 * 60 * 30,
   });
-
-  const isLoading = (isLoadingCustomers && customers.length === 0) || (isLoadingProducts && products.length === 0);
 
   const addItem = (p: Product, qty: number) => {
     setItems((prev) => {
@@ -67,8 +69,7 @@ function NewOrderPage() {
     });
   };
 
-  const removeItem = (id: string) =>
-    setItems((prev) => prev.filter((i) => i.product_id !== id));
+  const removeItem = (id: string) => setItems((prev) => prev.filter((i) => i.product_id !== id));
 
   const save = () => {
     const name = customer.trim();
@@ -98,24 +99,16 @@ function NewOrderPage() {
   return (
     <div className="min-h-screen bg-background pb-28">
       <AppHeader title={step === "customer" ? "Customer" : step === "products" ? "Products" : "Review"} back="/orders" />
-      <div className="mx-auto max-w-md px-4 pt-4">
-        {isLoading ? (
-          <div className="flex justify-center items-center py-20">
-            <div className="text-lg font-bold text-muted-foreground animate-pulse">جاري التحميل لأول مرة... ⏳</div>
-          </div>
-        ) : (
-          <div className="w-full">
-            {step === "customer" && <CustomerStep value={customer} onChange={setCustomer} customers={customers} />}
-            {step === "products" && <ProductsStep products={products} items={items} onPick={(p) => setPadForProduct(p)} onRemove={removeItem} onAddNew={() => setCreatingProduct(true)} />}
-            {step === "review" && <ReviewStep customer={customer} items={items} />}
-          </div>
-        )}
+      <div className="mx-auto max-w-md px-4 pt-4 w-full">
+        {step === "customer" && <CustomerStep value={customer} onChange={setCustomer} customers={customers} />}
+        {step === "products" && <ProductsStep products={products} items={items} onPick={(p) => setPadForProduct(p)} onRemove={removeItem} onAddNew={() => setCreatingProduct(true)} />}
+        {step === "review" && <ReviewStep customer={customer} items={items} />}
       </div>
 
       <div className="fixed inset-x-0 bottom-0 z-10 border-t border-border bg-background/95 backdrop-blur">
         <div className="mx-auto max-w-md p-4">
           {step === "customer" && (
-            <button disabled={!customer.trim() || isLoading} onClick={() => setStep("products")} className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-br from-primary to-primary-glow text-lg font-bold text-primary-foreground shadow-[var(--shadow-soft)] active:scale-[0.98] disabled:opacity-40">
+            <button disabled={!customer.trim()} onClick={() => setStep("products")} className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-br from-primary to-primary-glow text-lg font-bold text-primary-foreground shadow-[var(--shadow-soft)] active:scale-[0.98] disabled:opacity-40">
               Next <ArrowRight className="h-5 w-5" />
             </button>
           )}
@@ -267,9 +260,34 @@ function ProductSheet({ initial, onClose }: { initial: Product | null; onClose: 
     })();
   };
 
+  // كود ضغط الصور السحري
   const onFile = (f: File) => {
     const reader = new FileReader();
-    reader.onload = () => setImageUrl(reader.result as string);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        let width = img.width;
+        let height = img.height;
+        const MAX_WIDTH = 800;
+        const MAX_HEIGHT = 800;
+
+        if (width > height) {
+          if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
+        } else {
+          if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        ctx?.drawImage(img, 0, 0, width, height);
+
+        const compressedBase64 = canvas.toDataURL("image/jpeg", 0.7);
+        setImageUrl(compressedBase64);
+      };
+      img.src = event.target?.result as string;
+    };
     reader.readAsDataURL(f);
   };
 

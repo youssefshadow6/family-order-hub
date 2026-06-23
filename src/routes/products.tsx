@@ -20,19 +20,20 @@ function ProductsPage() {
   // حالة لحفظ نص البحث
   const [searchQuery, setSearchQuery] = useState("");
 
-  const { data: products = [] } = useQuery({
+  // التعديل هنا: ضفنا isLoadingProducts و staleTime
+  const { data: products = [], isLoading: isLoadingProducts } = useQuery({
     queryKey: ["products"],
     queryFn: async (): Promise<Product[]> => {
       const { data } = await supabase
         .from("products")
         .select("*")
-        // التعديل الأول: ترتيب المنتجات أبجدياً حسب الاسم
         .order("name", { ascending: true });
       return (data ?? []) as Product[];
     },
+    staleTime: 1000 * 60 * 30, // الكاش هيحتفظ بالمنتجات لمدة 30 دقيقة
   });
 
-  // التعديل الثاني: فلترة المنتجات بناءً على البحث
+  // فلترة المنتجات بناءً على البحث
   const filteredProducts = useMemo(() => {
     if (!searchQuery.trim()) return products;
     const lowerQuery = searchQuery.toLowerCase();
@@ -70,7 +71,15 @@ function ProductsPage() {
           />
         </div>
 
-        {products.length === 0 ? (
+        {/* التعديل هنا: شاشة التحميل الأنيقة */}
+        {isLoadingProducts ? (
+          <div className="mt-20 flex flex-col items-center justify-center gap-3 text-center">
+            <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+            <div className="text-base font-bold text-muted-foreground animate-pulse">
+              جاري تحميل المنتجات...
+            </div>
+          </div>
+        ) : products.length === 0 ? (
           <div className="mt-16 text-center text-muted-foreground">
             <Package className="mx-auto h-12 w-12 opacity-50" />
             <div className="mt-3 text-base font-medium">No products yet</div>
@@ -189,7 +198,6 @@ function ProductSheet({
       } else {
         newData = [optimisticProduct, ...old];
       }
-      // إعادة ترتيب المنتجات بعد الإضافة أو التعديل
       return newData.sort((a, b) => a.name.localeCompare(b.name));
     });
 

@@ -44,7 +44,14 @@ function NewOrderPage() {
     queryKey: ["products"],
     queryFn: async (): Promise<Product[]> => {
       const { data } = await supabase.from("products").select("*").order("name", { ascending: true });
-      if (data) localStorage.setItem("cached_products", JSON.stringify(data));
+      if (data) {
+        try {
+          const cacheSafeData = data.map(p => ({ ...p, image_url: "" }));
+          localStorage.setItem("cached_products", JSON.stringify(cacheSafeData));
+        } catch (e) {
+           console.error("Cache error", e);
+        }
+      }
       return (data ?? []) as Product[];
     },
     initialData: () => {
@@ -260,7 +267,6 @@ function ProductSheet({ initial, onClose }: { initial: Product | null; onClose: 
     })();
   };
 
-  // كود ضغط الصور السحري
   const onFile = (f: File) => {
     const reader = new FileReader();
     reader.onload = (event) => {
@@ -269,8 +275,9 @@ function ProductSheet({ initial, onClose }: { initial: Product | null; onClose: 
         const canvas = document.createElement("canvas");
         let width = img.width;
         let height = img.height;
-        const MAX_WIDTH = 800;
-        const MAX_HEIGHT = 800;
+        // التعديل هنا: تصغير الصور لتسريع التطبيق
+        const MAX_WIDTH = 300;
+        const MAX_HEIGHT = 300;
 
         if (width > height) {
           if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
@@ -283,7 +290,7 @@ function ProductSheet({ initial, onClose }: { initial: Product | null; onClose: 
         const ctx = canvas.getContext("2d");
         ctx?.drawImage(img, 0, 0, width, height);
 
-        const compressedBase64 = canvas.toDataURL("image/jpeg", 0.7);
+        const compressedBase64 = canvas.toDataURL("image/jpeg", 0.5);
         setImageUrl(compressedBase64);
       };
       img.src = event.target?.result as string;
